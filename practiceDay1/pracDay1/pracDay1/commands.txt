@@ -1,0 +1,17 @@
+#run 
+scrapy crawl doctor -o data.json
+scrapy crawl doctor -s DEFAULT_REQUEST_HEADERS="{'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en-US'}"
+#test run 
+scrapy shell https://www.marham.pk/doctors -s DEFAULT_REQUEST_HEADERS="{'User-Agent': 'Mozilla/5.0', 'Accept-Language': 'en-US'}"
+
+scrapy shell https://www.marham.pk/doctors
+
+response.xpath("//div[@id='popularSpecialtiesContainer']//div[@class='col-12 col-md-4 specialty-card-wrapper']")
+response.xpath(".//div[@class='specialty-content']//div[@class='specialty-meta']")
+
+
+
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36"
+}
+fetch("https://www.marham.pk/doctors/dermatologist", headers=headers)
