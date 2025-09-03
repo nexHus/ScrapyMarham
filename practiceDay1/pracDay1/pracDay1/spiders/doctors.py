@@ -1,8 +1,6 @@
-from matplotlib.pyplot import box
 import scrapy
 from pracDay1.items import doctorMainPage
 from scrapy.loader import ItemLoader
-import json
 
 
 class DoctorSpider(scrapy.Spider):
@@ -10,14 +8,18 @@ class DoctorSpider(scrapy.Spider):
     start_urls = ["https://www.marham.pk/doctors"]
     custom_settings = {
         'USER_AGENT': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36',
-           "AUTOTHROTTLE_ENABLED": True,
-    "AUTOTHROTTLE_START_DELAY": 2,
-    "AUTOTHROTTLE_MAX_DELAY": 10,
-    "AUTOTHROTTLE_TARGET_CONCURRENCY": 1.0,
-    "AUTOTHROTTLE_DEBUG": False,
+        "FEEDS": {
+            "doctors.csv": {"format": "csv", "overwrite": True},  # save results in CSV
+        },
+        "AUTOTHROTTLE_ENABLED": True,
+        "AUTOTHROTTLE_START_DELAY": 2,
+        "AUTOTHROTTLE_MAX_DELAY": 10,
+        "AUTOTHROTTLE_TARGET_CONCURRENCY": 1.0,
+        "AUTOTHROTTLE_DEBUG": False,
     }
 
     def parse(self, response):
+        """Parse main doctors page with specialties"""
         doctorBox = response.xpath("//div[@id='popularSpecialtiesContainer']//div[@class='col-12 col-md-4 specialty-card-wrapper']")
         for doctor in doctorBox:
             # Extract specialty data
@@ -35,7 +37,7 @@ class DoctorSpider(scrapy.Spider):
             if innerLink:
                 yield response.follow(innerLink, self.listOfDrs, meta=meta)
             else:
-                # No doctor list page, yield specialty only
+                # Specialty only (no doctors list)
                 loader = ItemLoader(item=doctorMainPage(), selector=doctor)
                 loader.add_value('typeOfDoc', typeOfDoc)
                 loader.add_value('totalNumOfDocs', totalNumOfDocs)
@@ -43,7 +45,7 @@ class DoctorSpider(scrapy.Spider):
                 yield loader.load_item()
 
     def listOfDrs(self, response):
-        # Get specialty data from meta
+        """Parse doctors under each specialty"""
         typeOfDoc = response.meta.get('typeOfDoc')
         totalNumOfDocs = response.meta.get('totalNumOfDocs')
         detailOfTypeDoc = response.meta.get('detailOfTypeDoc')
@@ -66,7 +68,6 @@ class DoctorSpider(scrapy.Spider):
             loader.add_value('qualifications', doc.css("p.text-sm:nth-of-type(2)::text").get())
 
             drProfLink = doc.css("a.text-blue.dr_profile_opened_from_listing::attr(href)").get()
-            # drProfLink = ''
 
             # Experience & satisfaction
             experience = doc.css('div.col-4:nth-of-type(2) p.text-bold.text-sm::text').get(default='').strip()
@@ -77,37 +78,53 @@ class DoctorSpider(scrapy.Spider):
             # Areas of interest
             interests = [i.strip() for i in doc.css("div.horizontal-scroll span.chips-highlight::text").getall()]
             loader.add_value('areas_of_interest', interests)
-            city = response.css('div.selectAppointmentOrOc:nth-of-type(1)').attrib["data-hospitalcity"]
-            loader.add_value('city', city)
+
+            # City from hospital data
+            city_node = response.css('div.selectAppointmentOrOc:nth-of-type(1)')
+            if city_node:
+                loader.add_value('city', city_node.attrib.get("data-hospitalcity"))
 
             if drProfLink:
-                print("were are going in for ", drProfLink)
-                # Pass the loader forward to inner profile
                 yield response.follow(drProfLink, self.parse_doctor_profile, meta={'loader': loader})
             else:
                 yield loader.load_item()
 
     def parse_doctor_profile(self, response):
         """Parse inside the doctor profile page"""
-        loader = response.meta['loader']
+        base_loader = response.meta['loader']
 
-        # Example: Reviews section
+        # Common doctor profile info
         section = response.css('#reviews-scroll div.row.shadow-card')
         noOfReview = section.css('h2.mb-0::text').get(default='').strip()
-        loader.add_value('reviews', noOfReview)
         rating = section.css('span.tag-highlight-round::text').get(default='').strip()
-        loader.add_value('rating', rating)
-        
+
+        # Hospital options
         options = response.css('.card-hospital')
-        
-        for option in options:
-            hospitalName = option.css('p.mb-0.text-bold.text-sm.text-underline::text').get(default='').strip()
-            loader.add_value('hospitalName', hospitalName)
-            fee = option.css('p.price::text').get(default='').strip()
-            loader.add_value('fee', fee)
-            location = option.css('a.text-sm.font-size-12 span ::text').get(default='').strip()
-            loader.add_value('location', location)
+        if not options:
+            # yield single row if no hospital options
+            base_loader.add_value('reviews', noOfReview)
+            base_loader.add_value('rating', rating)
+            yield base_loader.load_item()
+        else:
+            for option in options:
+                loader = ItemLoader(item=doctorMainPage(), selector=option)
 
-        # You can add more profile fields here if needed
+                # Copy base doctor data into this row
+                for k, v in base_loader.load_item().items():
+                    loader.add_value(k, v)
 
-        yield loader.load_item()
+                loader.add_value('reviews', noOfReview)
+                loader.add_value('rating', rating)
+
+                # Hospital-specific details
+                loader.add_value(
+                    'hospitalName',
+                    option.css('p.mb-0.text-bold.text-sm.text-underline::text').get(default='').strip()
+                )
+                loader.add_value('fee', option.css('p.price::text').get(default='').strip())
+                loader.add_value(
+                    'location',
+                    option.css('a.text-sm.font-size-12 span ::text').get(default='').strip()
+                )
+
+                yield loader.load_item()
