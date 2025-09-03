@@ -1,3 +1,4 @@
+from matplotlib.pyplot import box
 import scrapy
 from pracDay1.items import doctorMainPage
 from scrapy.loader import ItemLoader
@@ -76,22 +77,8 @@ class DoctorSpider(scrapy.Spider):
             # Areas of interest
             interests = [i.strip() for i in doc.css("div.horizontal-scroll span.chips-highlight::text").getall()]
             loader.add_value('areas_of_interest', interests)
-
-            # Consultation info
-            consultations = []
-            for c in doc.css("div.selectAppointmentOrOc"):
-                consultations.append({
-                    "type": c.css("p.text-bold.text-blue::text").get(),
-                    "hospital": c.attrib.get("data-hospitalName"),
-                    "city": c.attrib.get("data-hospitalCity"),
-                    "address": c.attrib.get("data-hospitalAddress"),
-                    "fee": c.attrib.get("data-amount"),
-                    "discounted_fee": c.attrib.get("data-discountedFee"),
-                    "link": c.attrib.get("data-onClickUrl"),
-                    "hospital_type": c.attrib.get("data-hospitalType"),
-                    "available_today": c.css("p.text-sm.text-wrap::text, p.text-sm::text").get(),
-                })
-            loader.add_value('consultations', json.dumps(consultations))
+            city = response.css('div.selectAppointmentOrOc:nth-of-type(1)').attrib["data-hospitalcity"]
+            loader.add_value('city', city)
 
             if drProfLink:
                 print("were are going in for ", drProfLink)
@@ -108,9 +95,18 @@ class DoctorSpider(scrapy.Spider):
         section = response.css('#reviews-scroll div.row.shadow-card')
         noOfReview = section.css('h2.mb-0::text').get(default='').strip()
         loader.add_value('reviews', noOfReview)
-
         rating = section.css('span.tag-highlight-round::text').get(default='').strip()
-        loader.add_value('rating', rating  )
+        loader.add_value('rating', rating)
+        
+        options = response.css('.card-hospital')
+        
+        for option in options:
+            hospitalName = option.css('p.mb-0.text-bold.text-sm.text-underline::text').get(default='').strip()
+            loader.add_value('hospitalName', hospitalName)
+            fee = option.css('p.price::text').get(default='').strip()
+            loader.add_value('fee', fee)
+            location = option.css('a.text-sm.font-size-12 span ::text').get(default='').strip()
+            loader.add_value('location', location)
 
         # You can add more profile fields here if needed
 

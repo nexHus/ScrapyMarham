@@ -14,4 +14,7 @@ response.xpath(".//div[@class='specialty-content']//div[@class='specialty-meta']
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36"
 }
-fetch("https://www.marham.pk/doctors/dermatologist", headers=headers)
+fetch("https://www.marham.pk/online-consultation/dermatologist/lahore/dr-muhammad-haroon-mahmood-26508", headers=headers)
+
+
+cd practiceDay1/pracDay1 
