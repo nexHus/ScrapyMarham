@@ -8,7 +8,12 @@ class DoctorSpider(scrapy.Spider):
     name = "doctor"
     start_urls = ["https://www.marham.pk/doctors"]
     custom_settings = {
-        'USER_AGENT': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36'
+        'USER_AGENT': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36',
+           "AUTOTHROTTLE_ENABLED": True,
+    "AUTOTHROTTLE_START_DELAY": 2,
+    "AUTOTHROTTLE_MAX_DELAY": 10,
+    "AUTOTHROTTLE_TARGET_CONCURRENCY": 1.0,
+    "AUTOTHROTTLE_DEBUG": False,
     }
 
     def parse(self, response):
@@ -60,6 +65,7 @@ class DoctorSpider(scrapy.Spider):
             loader.add_value('qualifications', doc.css("p.text-sm:nth-of-type(2)::text").get())
 
             drProfLink = doc.css("a.text-blue.dr_profile_opened_from_listing::attr(href)").get()
+            # drProfLink = ''
 
             # Experience & satisfaction
             experience = doc.css('div.col-4:nth-of-type(2) p.text-bold.text-sm::text').get(default='').strip()
@@ -88,6 +94,7 @@ class DoctorSpider(scrapy.Spider):
             loader.add_value('consultations', json.dumps(consultations))
 
             if drProfLink:
+                print("were are going in for ", drProfLink)
                 # Pass the loader forward to inner profile
                 yield response.follow(drProfLink, self.parse_doctor_profile, meta={'loader': loader})
             else:

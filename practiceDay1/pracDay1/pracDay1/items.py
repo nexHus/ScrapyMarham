@@ -29,4 +29,4 @@ class doctorMainPage(scrapy.Item):
     satisfaction = scrapy.Field(input_processor=MapCompose(getIntDoctor), output_processor=TakeFirst())
     areas_of_interest = scrapy.Field(output_processor=Join(", "))
     consultations = scrapy.Field()  # Store as JSON string
-    add_value = scrapy.Field()
+    rating = scrapy.Field()
