@@ -11,11 +11,20 @@ class DoctorSpider(scrapy.Spider):
         "FEEDS": {
             "doctors.csv": {"format": "csv", "overwrite": True},  # save results in CSV
         },
-        "AUTOTHROTTLE_ENABLED": True,
-        "AUTOTHROTTLE_START_DELAY": 2,
-        "AUTOTHROTTLE_MAX_DELAY": 10,
-        "AUTOTHROTTLE_TARGET_CONCURRENCY": 1.0,
-        "AUTOTHROTTLE_DEBUG": False,
+        'DOWNLOAD_DELAY': 3,           # 3 sec delay between requests
+    'RANDOMIZE_DOWNLOAD_DELAY': True,
+
+    # AutoThrottle settings
+    "AUTOTHROTTLE_ENABLED": True,
+    "AUTOTHROTTLE_START_DELAY": 2,
+    "AUTOTHROTTLE_MAX_DELAY": 15,
+    "AUTOTHROTTLE_TARGET_CONCURRENCY": 0.5,
+    "AUTOTHROTTLE_DEBUG": False,
+
+    # Retry settings
+    'RETRY_ENABLED': True,
+    'RETRY_TIMES': 5,
+    'RETRY_HTTP_CODES': [429, 500, 502, 503, 504],
     }
 
     def parse(self, response):
@@ -72,11 +81,16 @@ class DoctorSpider(scrapy.Spider):
             # Experience & satisfaction
             experience = doc.css('div.col-4:nth-of-type(2) p.text-bold.text-sm::text').get(default='').strip()
             satisfaction = doc.css('div.col-4:nth-of-type(3) p.text-bold.text-sm::text').get(default='').strip()
+            if len(satisfaction) == 0:
+                satisfaction = 0
+
             loader.add_value('experience', experience)
             loader.add_value('satisfaction', satisfaction)
 
             # Areas of interest
             interests = [i.strip() for i in doc.css("div.horizontal-scroll span.chips-highlight::text").getall()]
+            if len(interests) == 0:
+                interests = [typeOfDoc]
             loader.add_value('areas_of_interest', interests)
 
             # City from hospital data
@@ -96,7 +110,11 @@ class DoctorSpider(scrapy.Spider):
         # Common doctor profile info
         section = response.css('#reviews-scroll div.row.shadow-card')
         noOfReview = section.css('h2.mb-0::text').get(default='').strip()
+        if len(noOfReview) == 0:
+            noOfReview = 0
         rating = section.css('span.tag-highlight-round::text').get(default='').strip()
+        if len(rating) == 0:
+            rating = 0
 
         # Hospital options
         options = response.css('.card-hospital')

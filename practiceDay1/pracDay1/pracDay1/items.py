@@ -6,7 +6,7 @@ import re
 # Helper to convert numbers like "7,344" or "15 Yrs" or "100%" to int
 def getIntDoctor(value):
     if not value or str(value).strip() == '':
-        return None
+        return 0
     try:
         # Handle percentages like "100%" by removing the % sign
         clean_value = str(value).replace(",", "").replace("%", "").split(" ")[0]
@@ -32,6 +32,15 @@ def getCityFromProfileUrl(url):
     if len(parts) > 2:
         return parts[2]
     return None
+def getIntRating(value):
+    """Convert rating like '4/5' into integer 4"""
+    if not value:
+        return 0
+    try:
+        return int(str(value).split('/')[0])
+    except (ValueError, IndexError):
+        return None
+    
 class doctorMainPage(scrapy.Item):
     typeOfDoc = scrapy.Field(output_processor=TakeFirst())
     totalNumOfDocs = scrapy.Field(input_processor=MapCompose(getIntDoctor), output_processor=TakeFirst())
@@ -48,7 +57,7 @@ class doctorMainPage(scrapy.Item):
     satisfaction = scrapy.Field(input_processor=MapCompose(getIntDoctor), output_processor=TakeFirst())
     areas_of_interest = scrapy.Field(output_processor=Join(", "))
     # consultations = scrapy.Field()  # Store as JSON string
-    rating = scrapy.Field()
+    rating = scrapy.Field(input_processor=MapCompose(getIntRating), output_processor=TakeFirst())
     hospitalName = scrapy.Field()
     fee = scrapy.Field(input_processor=MapCompose(getIntPrice), output_processor=TakeFirst())
     location = scrapy.Field()
