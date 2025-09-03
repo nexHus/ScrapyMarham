@@ -3,6 +3,7 @@ from pracDay1.items import doctorMainPage
 from scrapy.loader import ItemLoader
 import json
 
+
 class DoctorSpider(scrapy.Spider):
     name = "doctor"
     start_urls = ["https://www.marham.pk/doctors"]
@@ -18,11 +19,13 @@ class DoctorSpider(scrapy.Spider):
             totalNumOfDocs = doctor.xpath(".//div[@class='specialty-content']//div[@class='specialty-meta']//a/text()").get()
             detailOfTypeDoc = doctor.xpath(".//div[@class='specialty-content']/p/text()").get()
             innerLink = doctor.xpath(".//div[@class='specialty-content']//h3/a/@href").get()
+
             meta = {
                 'typeOfDoc': typeOfDoc,
                 'totalNumOfDocs': totalNumOfDocs,
                 'detailOfTypeDoc': detailOfTypeDoc
             }
+
             if innerLink:
                 yield response.follow(innerLink, self.listOfDrs, meta=meta)
             else:
@@ -46,88 +49,29 @@ class DoctorSpider(scrapy.Spider):
             loader.add_value('totalNumOfDocs', totalNumOfDocs)
             loader.add_value('detailOfTypeDoc', detailOfTypeDoc)
 
+            # Basic doctor info
             name = doc.css("a.text-blue h3::text").get()
             if name:
                 loader.add_value('name', name.strip())
+
             loader.add_value('profile_url', doc.css("a.text-blue::attr(href)").get())
             loader.add_value('image_url', doc.css("picture source[media='(min-width: 768px)']::attr(srcset)").get())
             loader.add_value('specialization', doc.css("p.mb-0.mt-10::text").get())
             loader.add_value('qualifications', doc.css("p.text-sm:nth-of-type(2)::text").get())
 
-            # Extract reviews using multiple approaches
-            reviews = None
-            import re
-            
-            # Method 1: Try to extract from profile URL (like dr-name-12345 where 12345 is review count)
-            profile_url = doc.css("a.text-blue::attr(href)").get()
-            if profile_url:
-                # Look for numbers at the end of URL
-                url_matches = re.findall(r'-(\d+)$', profile_url)
-                if url_matches:
-                    reviews = url_matches[0]
-                    print(f"RAW REVIEWS VALUE (URL method): {reviews}")
-            
-            # Method 2: If URL method didn't work, try HTML content extraction
-            if not reviews:
-                reviews_raw = doc.css("a.dr_profile_opened_from_listing_reviews").getall()
-                if reviews_raw:
-                    # Get all text content from reviews section and find numbers
-                    reviews_text = "".join(reviews_raw)
-                    # Look for patterns like "2,026", "1,234", "999" etc.
-                    matches = re.findall(r'[\d,]+', reviews_text)
-                    if matches:
-                        # Take the first number found (should be the review count)
-                        reviews = matches[0]
-                        print(f"RAW REVIEWS VALUE (HTML method): {reviews}")
-            
-            # Method 3: Alternative direct text extraction
-            if not reviews:
-                reviews = doc.css("a.dr_profile_opened_from_listing_reviews p.text-bold::text").get()
-                if reviews:
-                    reviews = reviews.strip()
-                    print(f"RAW REVIEWS VALUE (direct method): {reviews}")
-            
-            # Method 4: Try to find in any div that contains review-like content
-            if not reviews:
-                # Look for elements that might contain review counts
-                all_text_elements = doc.css("div.col-4 p.text-bold::text").getall()
-                for text in all_text_elements:
-                    if text and re.match(r'^[\d,]+$', text.strip()):
-                        # This could be a review count if it's a pure number
-                        possible_reviews = text.strip()
-                        # Additional validation: check if nearby text suggests it's reviews
-                        reviews = possible_reviews
-                        print(f"RAW REVIEWS VALUE (fallback method): {reviews}")
-                        break
-            
-            if not reviews:
-                reviews = 0
-                print(f"RAW REVIEWS VALUE (no method worked): {reviews}")
-            
-            loader.add_value('reviews', reviews)
-            # Experience and satisfaction as before
-            experience, satisfaction = None, None
-            for col in doc.css("div.col-4"):
-                label = col.css("p.mb-0.text-sm::text").get()
-                value = col.css("p.text-bold.text-sm::text").get()
-                if not value:
-                    value = col.css("p.text-bold::text").get()
-                if label and value:
-                    label = label.strip().lower()
-                    value = value.strip()
-                    print(f"DEBUG: label={label}, value={value}")
-                    if 'experience' in label:
-                        experience = value
-                    elif 'satisfaction' in label:
-                        satisfaction = value
-            print(f"RAW EXTRACTED: reviews={reviews}, experience={experience}, satisfaction={satisfaction}")
+            drProfLink = doc.css("a.text-blue.dr_profile_opened_from_listing::attr(href)").get()
+
+            # Experience & satisfaction
+            experience = doc.css('div.col-4:nth-of-type(2) p.text-bold.text-sm::text').get(default='').strip()
+            satisfaction = doc.css('div.col-4:nth-of-type(3) p.text-bold.text-sm::text').get(default='').strip()
             loader.add_value('experience', experience)
             loader.add_value('satisfaction', satisfaction)
 
+            # Areas of interest
             interests = [i.strip() for i in doc.css("div.horizontal-scroll span.chips-highlight::text").getall()]
             loader.add_value('areas_of_interest', interests)
 
-            # Extract all consultation info
+            # Consultation info
             consultations = []
             for c in doc.css("div.selectAppointmentOrOc"):
                 consultations.append({
@@ -143,12 +87,24 @@ class DoctorSpider(scrapy.Spider):
                 })
             loader.add_value('consultations', json.dumps(consultations))
 
-            item = loader.load_item()
+            if drProfLink:
+                # Pass the loader forward to inner profile
+                yield response.follow(drProfLink, self.parse_doctor_profile, meta={'loader': loader})
+            else:
+                yield loader.load_item()
 
-            # Print for debug
-            print("="*50)
-            for k, v in item.items():
-                print(f"{k}: {v}")
-            print("="*50)
+    def parse_doctor_profile(self, response):
+        """Parse inside the doctor profile page"""
+        loader = response.meta['loader']
 
-            yield item
+        # Example: Reviews section
+        section = response.css('#reviews-scroll div.row.shadow-card')
+        noOfReview = section.css('h2.mb-0::text').get(default='').strip()
+        loader.add_value('reviews', noOfReview)
+
+        rating = section.css('span.tag-highlight-round::text').get(default='').strip()
+        loader.add_value('rating', rating  )
+
+        # You can add more profile fields here if needed
+
+        yield loader.load_item()
